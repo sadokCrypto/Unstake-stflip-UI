@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>stFLIP -> FLIP // unstake terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Major+Mono+Display&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0a; --bg-panel: #0f1410; --bg-elev: #131a14;
+    --border: #1e2820; --border-bright: #2a3a2c;
+    --text: #c9d4cb; --text-dim: #6b7a6e; --text-faint: #44524a;
+    --accent: #7fff9f; --accent-dim: #4a8a5a;
+    --warn: #ffb547; --error: #ff6464; --success: #7fff9f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--text);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 13px; line-height: 1.55; min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      radial-gradient(ellipse 800px 400px at 50% 0%, rgba(127, 255, 159, 0.04), transparent),
+      linear-gradient(180deg, transparent 0%, rgba(127, 255, 159, 0.015) 50%, transparent 100%);
+    background-attachment: fixed;
+    padding: 40px 24px 80px;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(127, 255, 159, 0.012) 2px, rgba(127, 255, 159, 0.012) 3px);
+    z-index: 1;
+  }
+  .container { max-width: 720px; margin: 0 auto; position: relative; z-index: 2; }
+
+  header {
+    border: 1px solid var(--border); border-radius: 2px;
+    padding: 24px 28px; margin-bottom: 24px;
+    background: var(--bg-panel); position: relative; overflow: hidden;
+  }
+  header::after {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.4;
+  }
+  .brand {
+    font-family: "Major Mono Display", monospace; font-size: 28px;
+    letter-spacing: 0.04em; color: var(--accent); margin-bottom: 4px;
+    text-shadow: 0 0 30px rgba(127, 255, 159, 0.3);
+  }
+  .brand-sub { color: var(--text-faint); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; }
+  .meta-row {
+    display: flex; justify-content: space-between; margin-top: 16px; padding-top: 16px;
+    border-top: 1px dashed var(--border); font-size: 11px; color: var(--text-dim);
+  }
+  .meta-row .label { color: var(--text-faint); }
+
+  .panel { border: 1px solid var(--border); background: var(--bg-panel); margin-bottom: 20px; border-radius: 2px; }
+  .panel-head {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; background: var(--bg-elev);
+  }
+  .panel-title {
+    font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--text-dim);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .panel-title::before { content: "\25B8"; color: var(--accent); font-size: 9px; }
+  .panel-body { padding: 20px 24px; }
+
+  .status-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-faint); margin-right: 8px;
+    box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 3px var(--border);
+  }
+  .status-dot.connected {
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 3px var(--accent-dim), 0 0 12px var(--accent);
+    animation: pulse 2.4s infinite;
+  }
+  .status-dot.warn { background: var(--warn); box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 3px var(--warn); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  .kv { display: grid; grid-template-columns: 160px 1fr; gap: 10px 16px; font-size: 12px; }
+  .kv dt { color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; padding-top: 2px; }
+  .kv dd { color: var(--text); word-break: break-all; font-variant-numeric: tabular-nums; }
+  .kv dd .accent { color: var(--accent); }
+  .kv dd.amount { font-size: 14px; }
+  .kv dd .unit { color: var(--text-dim); margin-left: 4px; }
+
+  .input-row {
+    display: flex; align-items: stretch; border: 1px solid var(--border);
+    background: var(--bg); border-radius: 2px; overflow: hidden; transition: border-color 0.15s;
+  }
+  .input-row:focus-within { border-color: var(--accent-dim); }
+  .input-row .prefix {
+    padding: 0 14px; display: flex; align-items: center; color: var(--text-faint);
+    background: var(--bg-elev); border-right: 1px solid var(--border);
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+  }
+  input[type="text"], input[type="number"] {
+    flex: 1; background: transparent; border: none; color: var(--text);
+    padding: 14px 16px; font-family: inherit; font-size: 15px; outline: none; font-variant-numeric: tabular-nums;
+  }
+  .input-row .suffix {
+    padding: 0 14px; display: flex; align-items: center; color: var(--accent);
+    font-size: 12px; border-left: 1px solid var(--border); background: var(--bg-elev);
+  }
+  .input-help { font-size: 11px; color: var(--text-faint); margin-top: 8px; display: flex; justify-content: space-between; }
+  .input-help a { color: var(--accent-dim); cursor: pointer; text-decoration: none; }
+  .input-help a:hover { color: var(--accent); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 14px 24px; background: transparent; border: 1px solid var(--accent-dim);
+    color: var(--accent); font-family: inherit; font-size: 12px; letter-spacing: 0.2em;
+    text-transform: uppercase; cursor: pointer; border-radius: 2px; transition: all 0.15s;
+    position: relative; overflow: hidden;
+  }
+  .btn:hover:not(:disabled) {
+    background: rgba(127, 255, 159, 0.06); border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(127, 255, 159, 0.15);
+  }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-faint); }
+  .btn-row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .btn-row .btn { flex: 1; min-width: 0; }
+  .btn.secondary { color: var(--text-dim); border-color: var(--border); }
+  .btn.secondary:hover:not(:disabled) { color: var(--text); border-color: var(--border-bright); box-shadow: none; background: var(--bg-elev); }
+  .btn.warn { color: var(--warn); border-color: var(--warn); }
+  .btn.warn:hover:not(:disabled) { background: rgba(255, 181, 71, 0.08); box-shadow: 0 0 20px rgba(255, 181, 71, 0.15); }
+
+  .log {
+    background: #050706; border: 1px solid var(--border); border-radius: 2px;
+    padding: 16px 18px; font-size: 12px; max-height: 320px; overflow-y: auto; line-height: 1.7;
+  }
+  .log-empty { color: var(--text-faint); font-style: italic; text-align: center; padding: 20px; }
+  .log-line { color: var(--text); padding: 2px 0; display: flex; gap: 12px; }
+  .log-line .ts { color: var(--text-faint); flex-shrink: 0; font-size: 11px; padding-top: 2px; }
+  .log-line .msg { flex: 1; word-break: break-word; }
+  .log-line.info .msg::before { content: "\00B7"; color: var(--text-dim); margin-right: 8px; }
+  .log-line.ok .msg { color: var(--success); }
+  .log-line.ok .msg::before { content: "\2713"; margin-right: 8px; }
+  .log-line.err .msg { color: var(--error); }
+  .log-line.err .msg::before { content: "\2717"; margin-right: 8px; }
+  .log-line.warn .msg { color: var(--warn); }
+  .log-line.warn .msg::before { content: "!"; margin-right: 8px; }
+  .log-line.tx .msg { color: var(--accent); }
+  .log-line.tx .msg::before { content: "\2197"; margin-right: 8px; }
+  .log a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-dim); }
+  .log a:hover { border-bottom-style: solid; }
+
+  .notice {
+    border: 1px solid var(--warn); background: rgba(255, 181, 71, 0.04);
+    padding: 14px 18px; border-radius: 2px; margin-bottom: 20px;
+    font-size: 12px; color: var(--text); display: flex; gap: 14px; align-items: flex-start;
+  }
+  .notice.error { border-color: var(--error); background: rgba(255, 100, 100, 0.04); }
+  .notice .icon { color: var(--warn); font-weight: bold; flex-shrink: 0; }
+  .notice.error .icon { color: var(--error); }
+  .notice strong { color: var(--warn); }
+  .notice.error strong { color: var(--error); }
+  .notice code { background: rgba(127, 255, 159, 0.06); color: var(--accent); padding: 1px 5px; border-radius: 2px; font-size: 11px; word-break: break-all; }
+  .notice pre {
+    background: #050706; color: var(--accent); padding: 8px 12px; border-radius: 2px;
+    margin-top: 8px; font-size: 11px; overflow-x: auto; border: 1px solid var(--border);
+  }
+
+  .provider-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .provider-btn {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 2px; cursor: pointer; text-align: left; color: var(--text);
+    font-family: inherit; font-size: 12px; transition: all 0.15s;
+  }
+  .provider-btn:hover { border-color: var(--accent-dim); background: rgba(127, 255, 159, 0.04); }
+  .provider-btn img { width: 24px; height: 24px; flex-shrink: 0; }
+  .provider-btn .name { flex: 1; }
+  .provider-btn .rdns { color: var(--text-faint); font-size: 10px; }
+
+  .hidden { display: none !important; }
+  .addr-mono { font-size: 11px; color: var(--text-dim); word-break: break-all; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="brand">unstake</div>
+    <div class="brand-sub">stflip -&gt; flip &middot; mainnet operator console</div>
+    <div class="meta-row">
+      <span><span class="label">net</span> ethereum mainnet &middot; chain 1</span>
+      <span><span class="label">build</span> v2 &middot; <span id="now">--:--:--</span></span>
+    </div>
+  </header>
+
+  <div class="notice error hidden" id="file-protocol-notice">
+    <span class="icon">!</span>
+    <div>
+      <strong>You opened this with file://</strong><br>
+      MetaMask cannot inject into pages loaded directly from disk. You need to serve this file over <code>http://localhost</code>. Open a terminal in the folder containing this HTML file and run one of these:
+      <pre>python3 -m http.server 8000</pre>
+      <pre>npx serve .</pre>
+      Then open <code>http://localhost:8000/unstake-stflip.html</code> in your browser.
+    </div>
+  </div>
+
+  <div class="notice hidden" id="no-wallet-notice">
+    <span class="icon">!</span>
+    <div>
+      <strong>No wallet detected.</strong> No browser extension is exposing a wallet provider on this page. Possible causes:
+      <ul style="margin: 8px 0 0 20px; color: var(--text-dim);">
+        <li>MetaMask is not installed &mdash; <a href="https://metamask.io/download/" target="_blank" style="color: var(--accent);">install it here</a></li>
+        <li>MetaMask is disabled in your browser's extensions</li>
+        <li>You're using a strict privacy browser that blocks injection</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="notice">
+    <span class="icon">!</span>
+    <div>
+      <strong>Read before you sign.</strong> This page calls the on-chain <code>unstakeAggregate</code> flow with parameters <code>(amount, 0, 0, 0)</code>, matching the reference script. MetaMask will display the raw contract call &mdash; always verify the contract address before approving. Start with a small amount.
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">environment</div>
+      <span id="env-state" style="font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em;">CHECKING&hellip;</span>
+    </div>
+    <div class="panel-body">
+      <dl class="kv">
+        <dt>page origin</dt><dd id="env-origin">&mdash;</dd>
+        <dt>protocol</dt><dd id="env-protocol">&mdash;</dd>
+        <dt>window.ethereum</dt><dd id="env-ethereum">&mdash;</dd>
+        <dt>providers found</dt><dd id="env-providers">&mdash;</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">wallet</div>
+      <div id="wallet-indicator">
+        <span class="status-dot" id="wallet-dot"></span>
+        <span id="wallet-state" style="font-size: 11px; color: var(--text-dim); letter-spacing: 0.1em;">DISCONNECTED</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div id="wallet-disconnected">
+        <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 12px;">Connect a wallet to read balances and submit transactions. Private key never leaves the wallet.</p>
+        <div id="provider-list" class="provider-list"></div>
+        <button class="btn hidden" id="btn-connect-fallback">Connect via window.ethereum</button>
+      </div>
+      <div id="wallet-connected" class="hidden">
+        <dl class="kv">
+          <dt>account</dt><dd class="addr-mono" id="account-addr">&mdash;</dd>
+          <dt>chain</dt><dd id="chain-info">&mdash;</dd>
+          <dt>eth balance</dt><dd class="amount" id="eth-balance">&mdash; <span class="unit">ETH</span></dd>
+          <dt>stflip balance</dt><dd class="amount"><span id="stflip-balance" class="accent">&mdash;</span> <span class="unit">stFLIP</span></dd>
+          <dt>flip balance</dt><dd class="amount" id="flip-balance">&mdash; <span class="unit">FLIP</span></dd>
+        </dl>
+        <div class="btn-row">
+          <button class="btn secondary" id="btn-refresh">Refresh balances</button>
+          <button class="btn secondary" id="btn-disconnect">Disconnect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">on-chain liquidity</div>
+      <span id="liq-state" style="font-size: 11px; color: var(--text-faint); letter-spacing: 0.1em;">IDLE</span>
+    </div>
+    <div class="panel-body">
+      <dl class="kv">
+        <dt>output flip</dt><dd class="amount" id="output-bal">&mdash; <span class="unit">FLIP</span></dd>
+        <dt>pending burns</dt><dd class="amount" id="pending-burns">&mdash; <span class="unit">FLIP</span></dd>
+        <dt>max instant</dt><dd class="amount"><span id="max-instant" class="accent">&mdash;</span> <span class="unit">FLIP</span></dd>
+      </dl>
+      <div class="btn-row">
+        <button class="btn secondary" id="btn-check-liq" disabled>Check liquidity</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">unstake</div></div>
+    <div class="panel-body">
+      <div class="input-row">
+        <span class="prefix">amount</span>
+        <input type="text" id="amount-input" placeholder="0.0" inputmode="decimal" />
+        <span class="suffix">stFLIP</span>
+      </div>
+      <div class="input-help">
+        <span id="amount-msg">Enter the stFLIP amount to convert into FLIP.</span>
+        <a id="btn-max">use max</a>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btn-approve" disabled>1 &middot; Approve stFLIP</button>
+        <button class="btn warn" id="btn-unstake" disabled>2 &middot; Unstake</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">activity log</div>
+      <a style="font-size: 11px; color: var(--text-faint); letter-spacing: 0.1em; cursor: pointer;" id="btn-clear-log">CLEAR</a>
+    </div>
+    <div class="panel-body" style="padding: 16px;">
+      <div class="log" id="log"><div class="log-empty">awaiting input&hellip;</div></div>
+    </div>
+  </div>
+
+  <footer style="text-align: center; color: var(--text-faint); font-size: 11px; margin-top: 32px; letter-spacing: 0.1em;">
+    based on kylezs/unstake-stFLIP &middot; client-side only &middot; no data leaves your browser
+  </footer>
+</div>
+
+<script type="module">
+  import { BrowserProvider, Contract, parseUnits, formatUnits } from "https://esm.sh/ethers@6.13.4";
+
+  const STFLIP     = "0x961D4921e1718E633BAC8Ded88c4a1cAe44b785a";
+  const AGGREGATOR = "0x38d8d03dFA9554D2232D4249EB23c48c23a24fA4";
+  const BURNER     = "0xb4078E779F4a982f27109522E2BA07dd9E133252";
+  const OUTPUT     = "0x6345A9F7e7069D478FFF3595f1522f28d8405151";
+  const FLIP       = "0x826180541412D574cf1336d22c0C0a287822678A";
+
+  const erc20Abi = [
+    "function decimals() view returns (uint8)",
+    "function balanceOf(address) view returns (uint256)",
+    "function allowance(address,address) view returns (uint256)",
+    "function approve(address,uint256) returns (bool)"
+  ];
+  const burnerAbi = ["function totalPendingBurns() view returns (uint256)"];
+  const aggregatorAbi = [
+    "function unstakeAggregate(uint256 amountInstantBurn, uint256 amountBurn, uint256 amountSwap, uint256 minimumAmountSwapOut) returns (uint256)"
+  ];
+
+  const state = {
+    provider: null, signer: null, account: null, chainId: null, rawProvider: null,
+    stflipDecimals: 18, stflipBalance: 0n, flipBalance: 0n, ethBalance: 0n,
+    allowance: 0n, maxInstant: 0n, inputAmount: 0n,
+    discoveredProviders: new Map()
+  };
+
+  const el = (id) => document.getElementById(id);
+  const $ = {
+    envState: el("env-state"), envOrigin: el("env-origin"), envProtocol: el("env-protocol"),
+    envEthereum: el("env-ethereum"), envProviders: el("env-providers"),
+    fileNotice: el("file-protocol-notice"), noWalletNotice: el("no-wallet-notice"),
+    walletDot: el("wallet-dot"), walletState: el("wallet-state"),
+    walletDisconnected: el("wallet-disconnected"), walletConnected: el("wallet-connected"),
+    accountAddr: el("account-addr"), chainInfo: el("chain-info"),
+    ethBalance: el("eth-balance"), stflipBalance: el("stflip-balance"), flipBalance: el("flip-balance"),
+    providerList: el("provider-list"), btnConnectFallback: el("btn-connect-fallback"),
+    btnDisconnect: el("btn-disconnect"), btnRefresh: el("btn-refresh"),
+    btnCheckLiq: el("btn-check-liq"), btnMax: el("btn-max"),
+    btnApprove: el("btn-approve"), btnUnstake: el("btn-unstake"), btnClearLog: el("btn-clear-log"),
+    amountInput: el("amount-input"), amountMsg: el("amount-msg"),
+    outputBal: el("output-bal"), pendingBurns: el("pending-burns"), maxInstant: el("max-instant"),
+    liqState: el("liq-state"), log: el("log"), now: el("now")
+  };
+
+  function log(msg, type = "info") {
+    if ($.log.querySelector(".log-empty")) $.log.innerHTML = "";
+    const ts = new Date().toTimeString().slice(0, 8);
+    const line = document.createElement("div");
+    line.className = `log-line ${type}`;
+    line.innerHTML = `<span class="ts">${ts}</span><span class="msg">${msg}</span>`;
+    $.log.appendChild(line);
+    $.log.scrollTop = $.log.scrollHeight;
+  }
+  function txLink(hash) {
+    return `<a href="https://etherscan.io/tx/${hash}" target="_blank" rel="noopener">${hash.slice(0, 10)}&hellip;${hash.slice(-8)}</a>`;
+  }
+  $.btnClearLog.onclick = () => { $.log.innerHTML = '<div class="log-empty">log cleared</div>'; };
+
+  setInterval(() => { $.now.textContent = new Date().toTimeString().slice(0, 8); }, 1000);
+  $.now.textContent = new Date().toTimeString().slice(0, 8);
+
+  const short = (a) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—";
+  const fmt = (v, d = 18) => {
+    try {
+      const n = parseFloat(formatUnits(v, d));
+      if (n === 0) return "0";
+      if (n < 0.0001) return n.toExponential(2);
+      return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+    } catch { return "—"; }
+  };
+
+  // ============ ENVIRONMENT DIAGNOSTICS ============
+  function runDiagnostics() {
+    $.envOrigin.textContent = location.origin || "(none)";
+    $.envProtocol.textContent = location.protocol;
+
+    if (location.protocol === "file:") {
+      $.fileNotice.classList.remove("hidden");
+      $.envProtocol.innerHTML = `<span style="color: var(--error);">${location.protocol} &mdash; wallet injection blocked</span>`;
+      log("file:// protocol detected — wallet extensions cannot inject here. Serve over localhost instead.", "err");
+    }
+
+    const hasEth = typeof window.ethereum !== "undefined";
+    $.envEthereum.innerHTML = hasEth
+      ? `<span class="accent">present</span>${window.ethereum.isMetaMask ? " &middot; isMetaMask=true" : ""}`
+      : `<span style="color: var(--error);">undefined</span>`;
+
+    log(`environment scan · protocol=${location.protocol} · window.ethereum=${hasEth ? "yes" : "no"}`);
+  }
+  runDiagnostics();
+
+  // ============ EIP-6963 PROVIDER DISCOVERY ============
+  function setupProviderDiscovery() {
+    window.addEventListener("eip6963:announceProvider", (event) => {
+      const { info, provider } = event.detail;
+      if (state.discoveredProviders.has(info.uuid)) return;
+      state.discoveredProviders.set(info.uuid, { info, provider });
+      log(`provider discovered · ${info.name} (${info.rdns})`, "ok");
+      renderProviderList();
+    });
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+    setTimeout(() => { renderProviderList(); updateEnvSummary(); }, 300);
+  }
+
+  function updateEnvSummary() {
+    const n = state.discoveredProviders.size;
+    if (n === 0 && !window.ethereum) {
+      $.envProviders.innerHTML = `<span style="color: var(--error);">0 &mdash; no wallet injected</span>`;
+      $.envState.textContent = "NO WALLET";
+      $.envState.style.color = "var(--error)";
+      if (location.protocol !== "file:") $.noWalletNotice.classList.remove("hidden");
+    } else if (n === 0 && window.ethereum) {
+      $.envProviders.innerHTML = `<span class="accent">legacy window.ethereum only</span>`;
+      $.envState.textContent = "OK (LEGACY)";
+      $.envState.style.color = "var(--warn)";
+    } else {
+      const names = Array.from(state.discoveredProviders.values()).map(p => p.info.name).join(", ");
+      $.envProviders.innerHTML = `<span class="accent">${n}</span> &middot; ${names}`;
+      $.envState.textContent = "OK";
+      $.envState.style.color = "var(--accent)";
+    }
+  }
+
+  function renderProviderList() {
+    $.providerList.innerHTML = "";
+    if (state.discoveredProviders.size === 0) {
+      if (window.ethereum) {
+        $.btnConnectFallback.classList.remove("hidden");
+        $.btnConnectFallback.textContent = window.ethereum.isMetaMask ? "Connect MetaMask" : "Connect via window.ethereum";
+      } else {
+        $.btnConnectFallback.classList.add("hidden");
+      }
+      return;
+    }
+    $.btnConnectFallback.classList.add("hidden");
+    for (const { info, provider } of state.discoveredProviders.values()) {
+      const btn = document.createElement("button");
+      btn.className = "provider-btn";
+      btn.innerHTML = `
+        ${info.icon ? `<img src="${info.icon}" alt="">` : '<span style="width:24px;"></span>'}
+        <span class="name">Connect <strong>${info.name}</strong></span>
+        <span class="rdns">${info.rdns}</span>
+      `;
+      btn.onclick = () => connect(provider, info.name);
+      $.providerList.appendChild(btn);
+    }
+  }
+  setupProviderDiscovery();
+
+  $.btnConnectFallback.onclick = () => {
+    if (!window.ethereum) { log("no wallet injected at window.ethereum", "err"); return; }
+    connect(window.ethereum, window.ethereum.isMetaMask ? "MetaMask" : "wallet");
+  };
+
+  async function connect(rawProvider, label) {
+    try {
+      log(`connecting via ${label}…`);
+      state.rawProvider = rawProvider;
+      state.provider = new BrowserProvider(rawProvider);
+      const accounts = await rawProvider.request({ method: "eth_requestAccounts" });
+      if (!accounts || accounts.length === 0) throw new Error("no accounts returned");
+      state.signer = await state.provider.getSigner();
+      state.account = await state.signer.getAddress();
+      const net = await state.provider.getNetwork();
+      state.chainId = Number(net.chainId);
+
+      $.walletDisconnected.classList.add("hidden");
+      $.walletConnected.classList.remove("hidden");
+      $.walletDot.classList.add("connected");
+      $.walletState.textContent = "CONNECTED";
+      $.accountAddr.textContent = state.account;
+      $.chainInfo.innerHTML = state.chainId === 1
+        ? `mainnet &middot; <span class="accent">id ${state.chainId}</span>`
+        : `<span style="color: var(--error);">WRONG NETWORK &middot; id ${state.chainId}</span>`;
+
+      log(`connected as ${short(state.account)} on chain ${state.chainId}`, "ok");
+
+      if (state.chainId !== 1) {
+        log(`chain id ${state.chainId} — switch ${label} to Ethereum mainnet (id 1).`, "warn");
+        $.walletDot.classList.remove("connected");
+        $.walletDot.classList.add("warn");
+        $.walletState.textContent = "WRONG NETWORK";
+      }
+
+      $.btnCheckLiq.disabled = false;
+      await refreshBalances();
+      await checkLiquidity();
+      updateButtons();
+
+      rawProvider.on?.("accountsChanged", () => location.reload());
+      rawProvider.on?.("chainChanged", () => location.reload());
+    } catch (e) {
+      log(`connect failed: ${e.shortMessage || e.message || String(e)}`, "err");
+      if (e.code === 4001) log("user rejected the connection request", "warn");
+      if (e.code === -32002) log("wallet already has a pending request — open the extension to handle it", "warn");
+    }
+  }
+
+  $.btnDisconnect.onclick = () => location.reload();
+
+  async function refreshBalances() {
+    if (!state.account) return;
+    try {
+      log("reading balances…");
+      const stflip = new Contract(STFLIP, erc20Abi, state.provider);
+      const flip = new Contract(FLIP, erc20Abi, state.provider);
+      const [dec, sBal, fBal, eBal, allow] = await Promise.all([
+        stflip.decimals(),
+        stflip.balanceOf(state.account),
+        flip.balanceOf(state.account),
+        state.provider.getBalance(state.account),
+        stflip.allowance(state.account, AGGREGATOR)
+      ]);
+      state.stflipDecimals = Number(dec);
+      state.stflipBalance = sBal; state.flipBalance = fBal;
+      state.ethBalance = eBal; state.allowance = allow;
+
+      $.stflipBalance.textContent = fmt(sBal, state.stflipDecimals);
+      $.ethBalance.innerHTML = `${fmt(eBal, 18)} <span class="unit">ETH</span>`;
+      $.flipBalance.innerHTML = `${fmt(fBal, state.stflipDecimals)} <span class="unit">FLIP</span>`;
+      log(`balances · stFLIP ${fmt(sBal, state.stflipDecimals)} · FLIP ${fmt(fBal, state.stflipDecimals)} · ETH ${fmt(eBal, 18)}`, "ok");
+      parseAmount();
+      updateButtons();
+    } catch (e) {
+      log(`balance read failed: ${e.shortMessage || e.message}`, "err");
+    }
+  }
+  $.btnRefresh.onclick = async () => { await refreshBalances(); await checkLiquidity(); };
+
+  async function checkLiquidity() {
+    if (!state.provider) return;
+    try {
+      $.liqState.textContent = "FETCHING…";
+      $.liqState.style.color = "var(--text-dim)";
+      const flip = new Contract(FLIP, erc20Abi, state.provider);
+      const burner = new Contract(BURNER, burnerAbi, state.provider);
+      const [outBal, pending] = await Promise.all([
+        flip.balanceOf(OUTPUT),
+        burner.totalPendingBurns()
+      ]);
+      const maxInstant = outBal - pending;
+      state.maxInstant = maxInstant > 0n ? maxInstant : 0n;
+      $.outputBal.innerHTML = `${fmt(outBal, state.stflipDecimals)} <span class="unit">FLIP</span>`;
+      $.pendingBurns.innerHTML = `${fmt(pending, state.stflipDecimals)} <span class="unit">FLIP</span>`;
+      $.maxInstant.textContent = fmt(state.maxInstant, state.stflipDecimals);
+      $.liqState.textContent = "OK";
+      $.liqState.style.color = "var(--accent)";
+      log(`liquidity · output ${fmt(outBal, state.stflipDecimals)} · pending ${fmt(pending, state.stflipDecimals)} · max instant ${fmt(state.maxInstant, state.stflipDecimals)}`);
+      parseAmount();
+      updateButtons();
+    } catch (e) {
+      $.liqState.textContent = "ERROR";
+      $.liqState.style.color = "var(--error)";
+      log(`liquidity check failed: ${e.shortMessage || e.message}`, "err");
+    }
+  }
+  $.btnCheckLiq.onclick = checkLiquidity;
+
+  $.btnMax.onclick = () => {
+    if (!state.stflipBalance) return;
+    $.amountInput.value = formatUnits(state.stflipBalance, state.stflipDecimals);
+    parseAmount();
+  };
+  $.amountInput.addEventListener("input", parseAmount);
+
+  function parseAmount() {
+    const raw = $.amountInput.value.trim();
+    if (!raw) {
+      state.inputAmount = 0n;
+      $.amountMsg.textContent = "Enter the stFLIP amount to convert into FLIP.";
+      $.amountMsg.style.color = "var(--text-faint)";
+      updateButtons();
+      return;
+    }
+    try {
+      state.inputAmount = parseUnits(raw, state.stflipDecimals);
+      if (state.inputAmount <= 0n) throw new Error("zero");
+      if (state.account && state.inputAmount > state.stflipBalance) {
+        $.amountMsg.textContent = `exceeds stFLIP balance (${fmt(state.stflipBalance, state.stflipDecimals)})`;
+        $.amountMsg.style.color = "var(--error)";
+      } else if (state.maxInstant > 0n && state.inputAmount > state.maxInstant) {
+        $.amountMsg.textContent = `exceeds instant liquidity (${fmt(state.maxInstant, state.stflipDecimals)}) — tx will revert`;
+        $.amountMsg.style.color = "var(--warn)";
+      } else {
+        $.amountMsg.textContent = `parsed · ${state.inputAmount.toString()} wei`;
+        $.amountMsg.style.color = "var(--text-dim)";
+      }
+    } catch {
+      state.inputAmount = 0n;
+      $.amountMsg.textContent = "invalid amount";
+      $.amountMsg.style.color = "var(--error)";
+    }
+    updateButtons();
+  }
+
+  function updateButtons() {
+    const haveSigner = !!state.signer && state.chainId === 1;
+    const validAmount = state.inputAmount > 0n && state.inputAmount <= state.stflipBalance;
+    const needsApprove = state.allowance < state.inputAmount;
+    $.btnApprove.disabled = !(haveSigner && validAmount && needsApprove);
+    $.btnUnstake.disabled = !(haveSigner && validAmount && !needsApprove);
+    if (haveSigner && validAmount) {
+      if (needsApprove) {
+        $.btnApprove.textContent = "1 · Approve stFLIP";
+        $.btnUnstake.textContent = "2 · Unstake (approve first)";
+      } else {
+        $.btnApprove.textContent = "✓ Allowance OK";
+        $.btnUnstake.textContent = "2 · Unstake";
+      }
+    }
+  }
+
+  $.btnApprove.onclick = async () => {
+    if (!state.signer) return;
+    try {
+      $.btnApprove.disabled = true;
+      $.btnApprove.textContent = "1 · Awaiting wallet…";
+      log(`requesting approve · ${fmt(state.inputAmount, state.stflipDecimals)} stFLIP -> aggregator`);
+      const stflip = new Contract(STFLIP, erc20Abi, state.signer);
+      const tx = await stflip.approve(AGGREGATOR, state.inputAmount);
+      log(`approve sent · ${txLink(tx.hash)}`, "tx");
+      $.btnApprove.textContent = "1 · Mining…";
+      const rcpt = await tx.wait();
+      log(`approve mined · block ${rcpt.blockNumber} · status ${rcpt.status}`, "ok");
+      await refreshBalances();
+    } catch (e) {
+      log(`approve failed: ${e.shortMessage || e.message}`, "err");
+    } finally {
+      updateButtons();
+    }
+  };
+
+  $.btnUnstake.onclick = async () => {
+    if (!state.signer) return;
+    const proceed = confirm(
+      `Submit unstake?\n\n` +
+      `Amount: ${fmt(state.inputAmount, state.stflipDecimals)} stFLIP\n` +
+      `Contract: ${AGGREGATOR}\n` +
+      `Call: unstakeAggregate(amount, 0, 0, 0)\n\n` +
+      `FLIP will be sent to ${state.account}.\n\n` +
+      `MetaMask will ask for final approval.`
+    );
+    if (!proceed) { log("unstake cancelled by user", "warn"); return; }
+    try {
+      $.btnUnstake.disabled = true;
+      $.btnUnstake.textContent = "2 · Awaiting wallet…";
+      log(`submitting unstakeAggregate(${state.inputAmount.toString()}, 0, 0, 0)`);
+      const agg = new Contract(AGGREGATOR, aggregatorAbi, state.signer);
+      const tx = await agg.unstakeAggregate(state.inputAmount, 0n, 0n, 0n);
+      log(`unstake sent · ${txLink(tx.hash)}`, "tx");
+      $.btnUnstake.textContent = "2 · Mining…";
+      const rcpt = await tx.wait();
+      if (rcpt.status === 1) log(`unstake mined · block ${rcpt.blockNumber} — FLIP received`, "ok");
+      else log(`unstake reverted · block ${rcpt.blockNumber}`, "err");
+      await refreshBalances();
+      await checkLiquidity();
+    } catch (e) {
+      log(`unstake failed: ${e.shortMessage || e.message}`, "err");
+    } finally {
+      $.btnUnstake.textContent = "2 · Unstake";
+      updateButtons();
+    }
+  };
+
+  log("terminal ready");
+</script>
+</body>
+</html>
